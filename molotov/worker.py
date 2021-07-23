@@ -44,7 +44,7 @@ class Worker(object):
 
     async def run(self):
         if self.delay > 0.0:
-            await cancellable_sleep(self.delay)
+            await cancellable_sleep(self.delay, loop=self.loop)
         if is_stopped():
             return
         self.results["WORKER"] += 1
@@ -159,7 +159,7 @@ class Worker(object):
 
                 self.count += 1
                 if self.args.delay > 0.0:
-                    await cancellable_sleep(self.args.delay)
+                    await cancellable_sleep(self.args.delay, loop=self.loop)
                 else:
                     # forces a context switch
                     await asyncio.sleep(0)
@@ -223,7 +223,7 @@ class Worker(object):
             await self.send_event("scenario_success", scenario=scenario)
 
             if scenario["delay"] > 0.0:
-                await cancellable_sleep(scenario["delay"])
+                await cancellable_sleep(scenario["delay"], loop=self.loop)
             return 1
         except Exception as exc:
             await self.send_event("scenario_failure", scenario=scenario, exception=exc)

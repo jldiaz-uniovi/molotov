@@ -11,7 +11,7 @@ class SharedConsole(object):
     """Multi-process compatible stdout console.
     """
 
-    def __init__(self, interval=0.1, max_lines_displayed=20, stream=sys.stdout):
+    def __init__(self, interval=0.1, max_lines_displayed=20, stream=sys.stdout, loop=None):
         self._stream = multiprocessing.Queue()
         self._interval = interval
         self._stop = True
@@ -19,6 +19,7 @@ class SharedConsole(object):
         self._stop = False
         self._max_lines_displayed = max_lines_displayed
         self.stream = stream
+        self.loop = loop
 
     async def stop(self):
         self._stop = True
@@ -52,7 +53,7 @@ class SharedConsole(object):
                     await asyncio.sleep(0)
             self.stream.flush()
             if not self._stop:
-                await cancellable_sleep(self._interval)
+                await cancellable_sleep(self._interval, loop=self.loop)
 
     def print(self, line, end="\n"):
         if os.getpid() != self._creator:

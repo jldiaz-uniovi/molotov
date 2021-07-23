@@ -241,7 +241,7 @@ def direct_print(stream, msg):
     stream.flush()
 
 
-def run(args, stream=None):
+def run(args, stream=None, loop=None):
     if stream is None:
         stream = sys.stdout
 
@@ -298,7 +298,7 @@ def run(args, stream=None):
             )
             sys.exit(1)
 
-    res = Runner(args)()
+    res = Runner(args, loop)()
 
     def _dict(counters):
         res = {}
