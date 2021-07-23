@@ -3,12 +3,13 @@ import signal
 import multiprocessing
 import asyncio
 import os
+import threading
 
 from molotov.api import get_fixture
 from molotov.listeners import EventSender
 from molotov.stats import get_statsd_client
 from molotov.sharedcounter import SharedCounters
-from molotov.util import cancellable_sleep, stop, is_stopped, set_timer
+from molotov.util import _make_sleep, stop, is_stopped, set_timer
 from molotov.worker import Worker
 
 
@@ -40,6 +41,7 @@ class Runner(object):
             "SESSION_SETUP_FAILED",
         )
         self.eventer = EventSender(self.console)
+        self.cancellable_sleep = _make_sleep()
 
     def _set_statsd(self):
         if self.args.statsd:
@@ -105,7 +107,7 @@ class Runner(object):
                     for job in jobs:
                         if job.exitcode is not None and job in self._procs:
                             self._procs.remove(job)
-                    await cancellable_sleep(args.console_update)
+                    await self.cancellable_sleep(args.console_update, loop=self.loop)
                 await self.console.stop()
                 await self.eventer.stop()
 
@@ -167,7 +169,7 @@ class Runner(object):
 
             async def _duration_killer():
                 cancelled = object()
-                res = await cancellable_sleep(self.args.duration, result=cancelled)
+                res = await self.cancellable_sleep(self.args.duration, result=cancelled, loop=self.loop)
                 if res is cancelled or (res and not res.canceled()):
                     self._shutdown(None, None)
                     await asyncio.sleep(0)
@@ -211,7 +213,9 @@ class Runner(object):
         self._tasks.append(workers)
 
         try:
+            print(f"Molotov _process (tid={threading.get_ident()}) waiting for {len(self._tasks)} tasks")
             self.loop.run_until_complete(self.gather(*self._tasks))
+            print(f"Molotov _process (tid={threading.get_ident()}) done")
         finally:
             if self.statsd is not None:
                 self.loop.run_until_complete(self.ensure_future(self.statsd.close()))
@@ -219,7 +223,7 @@ class Runner(object):
             self.loop.close()
 
     def _kill_tasks(self):
-        cancellable_sleep.cancel_all()
+        self.cancellable_sleep.cancel_all()
         for task in reversed(self._tasks):
             with suppress(asyncio.CancelledError):
                 task.cancel()
@@ -236,11 +240,11 @@ class Runner(object):
     async def _display_results(self, update_interval):
         while not is_stopped():
             self.console.print(self.display_results(), end="\r")
-            await cancellable_sleep(update_interval)
+            await self.cancellable_sleep(update_interval, loop=self.loop)
         await self.console.stop()
 
     async def _send_workers_event(self, update_interval):
         while not self.eventer.stopped() and not is_stopped():
             workers = self._results["WORKER"].value
             await self.eventer.send_event("current_workers", workers=workers)
-            await cancellable_sleep(update_interval)
+            await self.cancellable_sleep(update_interval, loop=self.loop)
