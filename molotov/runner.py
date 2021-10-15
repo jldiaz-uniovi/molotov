@@ -135,7 +135,7 @@ class Runner(object):
         def _prepare():
             tasks = []
             delay = 0
-            if args.ramp_up > 0.0:
+            if args.ramp_up > 0.0 and args.workers > 0:
                 step = args.ramp_up / args.workers
             else:
                 step = 0.0
